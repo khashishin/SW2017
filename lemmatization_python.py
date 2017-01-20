@@ -1,7 +1,7 @@
 import csv
 
 def open_file(filename):
-        f = open(filename, 'r', encoding="utf8") # opens the csv file
+        f = open(filename, 'r') # opens the csv file
         row_list = f.readlines()
         f.close()      # closing
         return row_list
