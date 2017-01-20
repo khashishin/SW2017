@@ -42,11 +42,16 @@ for i, elem in enumerate(sub_sites[target_wojewodztwo]):
     if i == 1:
         break
     for ii, category in enumerate(categories):
-        if ii == 1:
+        if ii == 2:
             break
         final_url = elem+category
         print final_url
+
+
         web_soup = soup(urllib2.urlopen(final_url), "html.parser")
+        # web_soup = soup(open("view-source_chodziez.naszemiasto.pl_wydarzenia_urzad-miasta_.html"), "html.parser")
+        # print web_soup
+
         # Najwiekszy news na gorze
         top_section = web_soup.findAll(name="section", id="rotator-sb")
         for element in top_section:
@@ -59,8 +64,23 @@ for i, elem in enumerate(sub_sites[target_wojewodztwo]):
         # Glowna lista pionowa
         srodek = web_soup.findAll(name="div", id="kol-srodek")
         for kol in srodek:
-            print srodek
-print len(articles)
+            clearfix_section = kol.findAll(name="article", class_="clearfix")
+            for clearfix in clearfix_section:
+                for a in clearfix.findAll(name="a"):
+                    if a["href"][0:9] == "/artykul/":
+                        articles.append(elem+a["href"])
+
+        # Dolne 3 newsy
+        dol = web_soup.findAll(name="section", class_="aktualnosciLista poleSrodek")[0]
+        lista_dol = dol.findAll(name="a")
+        for a in lista_dol:
+            if a["href"][0:9] == "/artykul/":
+                articles.append(elem+a["href"])
+
+
+print len(articles),  len(set(articles))
+for e in set(articles):
+    print e
 
 
 
