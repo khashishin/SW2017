@@ -1,7 +1,7 @@
 import urllib2
 from bs4 import BeautifulSoup as soup
 url = "http://www.naszemiasto.pl/lista_miejscowosci/"
-web_soup = soup(urllib2.urlopen(url))
+web_soup = soup(urllib2.urlopen(url), "html.parser")
 sub_sites = dict()
 
 # ze stron danego wojewodztwa pobrac informacje
@@ -46,7 +46,7 @@ for i, elem in enumerate(sub_sites[target_wojewodztwo]):
             break
         final_url = elem+category
         print final_url
-        web_soup = soup(urllib2.urlopen(final_url))
+        web_soup = soup(urllib2.urlopen(final_url), "html.parser")
         # Najwiekszy news na gorze
         top_section = web_soup.findAll(name="section", id="rotator-sb")
         for element in top_section:
