@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup as soup
 import lemmatization_python as lemma
 url = "http://www.naszemiasto.pl/lista_miejscowosci/"
 coords_url = "http://astronomia.zagan.pl/art/wspolrzedne.html"
-
+strip_signs_list = [',', '.', '\r', '\n', '-', '"', "'", ":", "(", ")", "#", "^", "&", "!", "?", "[", "]"]
 # ze stron danego wojewodztwa pobrac informacje
 # lematyzowac informacje
 #     osobno zapisac wyrazy z duzymy literami,
@@ -87,17 +87,36 @@ def get_articles():
                         articles.append(elem+a["href"])
     return list(set(articles))
 
+def replace_br_with_spaces(elem):
+    text = ''
+    for e in elem.recursiveChildGenerator():
+        if isinstance(e, basestring):
+            text += e.strip()
+        elif e.name == 'br':
+            text += ' '
+    return text
+
+def delete_unallowed_signs(text):
+    for ch in strip_signs_list:
+        if ch in text:
+            text = text.replace(ch, "")
+    return text
 news_list = get_articles()
 
 news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
 for article in news_list:
     print article
     news_lemma_dict[article] = {"upper_case": [], "lower_case": []}
-    title = soup(urllib2.urlopen(article), "html.parser").findAll(name="h1", class_="matTytul")[0].string
+    article_parser = soup(urllib2.urlopen(article), "html.parser")
+    title = article_parser.findAll(name="h1", class_="matTytul")[0].string
     print title
-    content = soup(urllib2.urlopen(article), "html.parser").findAll(name="div", id="tresc")
+    content = article_parser.findAll(name="div", id="tresc")
+    content = delete_unallowed_signs(replace_br_with_spaces(content[0]))
     print content
     break
+
+
+
 
 
 
