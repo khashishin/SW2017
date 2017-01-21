@@ -25,13 +25,15 @@ def save_dict_to_csv(filename,dictionary, split_values=False):
             if split_values:
                 for val in value:
                     try:
-                        mapping_writer.writerow([key.lower(), val.lower()])
+                        mapping_writer.writerow([str(key.encode('utf-8', 'ignore')).lower(), str(val.lower())])
                     except UnicodeEncodeError:
+                        mapping_writer.writerow([str(key).lower(), str(val.encode('utf-8', 'ignore').lower())])
                         continue
             else:
                 try:
-                    mapping_writer.writerow([key.lower(), value.lower()])
+                    mapping_writer.writerow([str(key.encode('utf-8', 'ignore')).lower(), str(value).lower()])
                 except UnicodeEncodeError:
+                    mapping_writer.writerow([str(key).lower(), str(value.encode('utf-8', 'ignore').lower())])
                     continue
 
 def save_synonyms_dict(filename,dictionary):
@@ -58,12 +60,13 @@ def find_adjectives_and_nouns(word):
                 text_splitted = results.text.split()
                 if u'przym.' in text_splitted or u'rzecz.' in text_splitted: #Look for adjectives and similar nouns
                                 for phrase in text_splitted[1:]:
-                                    if len(phrase) > 3:
-                                        adjective_list.add(delete_unallowed_signs(phrase).replace(',',''))
+                                    phrase=delete_unallowed_signs(phrase).replace(",","")
+                                    if len(phrase) > 4:
+                                        adjective_list.add(delete_unallowed_signs(phrase).replace(',','').lower())
                                         # print delete_unallowed_signs(phrase).replace(',','')
             except TypeError:
                 continue
-        global_adjective_dict[word]=adjective_list
+        global_adjective_dict[word.lower()]=adjective_list
         time.sleep(0.1)
     except urllib2.HTTPError:
         return
@@ -125,14 +128,14 @@ def declension_of_term(term):
 global_adjective_dict = {} # Poznań : set(poznański, poznaniak ...)
 lemat_dict={} #poznański : poznan
 town_names = return_file_contents("miasta.txt")
-
+# town_names = ['Poznań']
 for town in town_names:
+    print town
     try:
         find_adjectives_and_nouns(town)
-
-        declension_of_term(town)
-        for adj_and_noun in global_adjective_dict[town]:
-            print "ADJ/NOUN", adj_and_noun
+        # declension_of_term(town)
+        for adj_and_noun in global_adjective_dict[town.lower()]:
+            # print "ADJ/NOUN", adj_and_noun
             declension_of_term(adj_and_noun)
     except KeyError:
         continue
