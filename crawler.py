@@ -22,6 +22,12 @@ target_wojewodztwo = "wielkopolskie"
 # mapowac miasto do zbioru info jezeli sa relewantne do zapytania
 # rel
 
+class News:
+
+    def News(self, link, lemmatized_words):
+        self.link = link
+        self.lemmatized_words = lemmatized_words
+
 def get_cities_names_and_coords():
     cities_coords = dict()
     # f = codecs.open("cities_coords.csv", encoding='utf-8')
@@ -37,7 +43,7 @@ def get_cities_names_and_coords():
         for row in reader:
             row_as_list = list(row)
             # Mapping city name to coords in format like this: ((19,42), (49,42))
-            cities_coords[row_as_list[0]] = ((row_as_list[1][0:2], row_as_list[1][4:6]), (row_as_list[2][0:2],row_as_list[2][4:6]))
+            cities_coords[row_as_list[0].lower().decode("utf-8")] = ((row_as_list[1][0:2], row_as_list[1][4:6]), (row_as_list[2][0:2],row_as_list[2][4:6]))
             # print row_as_list[0],  cities_coords[row_as_list[0]]
 
             # fmt = u'{:<15}'*len(row_as_list)
@@ -115,31 +121,54 @@ def delete_unallowed_signs(text):
             text = text.replace(ch, "")
     return text
 
+def most_common_in_list(lst):
+    return max(set(lst), key=lst.count)
 news_list = get_articles()
 
+def create_city_news_dict(city_to_coord_dict):
+    city_news_dict = dict()
+    for city_name in city_to_coord_dict:
+        city_news_dict[city_name] = [] # List of News
+    return  city_news_dict
+
 news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
+
 # LEMMATIZATION
-# lemma_dict = lemma.get_lemma_dict()
+lemma_dict = lemma.get_lemma_dict()
 
 # City names and coordinates mapping.
 city_to_coord_mapping = get_cities_names_and_coords()
 
+# City to news mapping
+city_to_news_mapping = create_city_news_dict(city_to_coord_mapping)
+print city_to_news_mapping
+# print city_to_coord_mapping["chodzież"]
 
-# city_to_news_mapping = dict()
-# cities_list = []
-# # print lemma_dict["poznania"]
-#
-# for article in news_list:
-#     print article
-#     news_lemma_dict[article] = {"upper_case": [], "lower_case": []}
-#     article_parser = soup(urllib2.urlopen(article), "html.parser")
-#     title = article_parser.findAll(name="h1", class_="matTytul")[0].string
-#     print title
-#     content = article_parser.findAll(name="div", id="tresc")
-#     content = delete_unallowed_signs(replace_br_with_spaces(content[0]))
-#     for word in content.split():
-#         print word
-#     break
+# print lemma_dict["przynajmowaną"]
+# print lemma_dict["chodzieży"]
+
+for article in news_list:
+    print article
+    news_lemma_dict[article] = {"upper_case": [], "lower_case": []}
+    article_parser = soup(urllib2.urlopen(article), "html.parser")
+    title = article_parser.findAll(name="h1", class_="matTytul")[0].string
+    print title
+    content = article_parser.findAll(name="div", id="tresc")
+    content = delete_unallowed_signs(replace_br_with_spaces(content[0]))
+    cities_names_mentioned_list = []
+    for word in content.split():
+        if word[0].isupper():
+            try:
+                base_form = lemma_dict[word.lower().encode('utf-8')]
+                # print word.lower(),  "->", base_form
+                if base_form in city_to_coord_mapping:
+                    cities_names_mentioned_list.append(base_form)
+                    # print base_form, "in base"
+            except KeyError:
+                pass
+                # print "Can't find base word for", word
+    print "news jest z miasta:", most_common_in_list(cities_names_mentioned_list)
+    break
 
 
 
