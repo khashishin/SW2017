@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import csv
 import codecs
+import sys
 import urllib2
 from bs4 import BeautifulSoup as soup
 import lemmatization_python as lemma
@@ -24,12 +25,19 @@ target_wojewodztwo = "wielkopolskie"
 
 class News:
 
-    def News(self, link, lemmatized_words):
+    def __init__(self, link,published_date, title, lemmatized_words, tags):
         self.link = link
+        self.published_date = published_date
+        self.title = title
         self.lemmatized_words = lemmatized_words
+        self.tags = tags
+
+    def __str__(self):
+        return self.link + ' '.join([word for word in self.lemmatized_words])
 
 def get_cities_names_and_coords():
     cities_coords = dict()
+    cities_to_news = dict()
     # f = codecs.open("cities_coords.csv", encoding='utf-8')
     # for line in f:
     #     print unicode(line).encode('utf8'), type(unicode(line).encode('utf8'))
@@ -42,13 +50,30 @@ def get_cities_names_and_coords():
         reader = csv.reader(in_file, delimiter=",")
         for row in reader:
             row_as_list = list(row)
+            city_name = row_as_list[0].decode("utf-8")
             # Mapping city name to coords in format like this: ((19,42), (49,42))
-            cities_coords[row_as_list[0].lower().decode("utf-8")] = ((row_as_list[1][0:2], row_as_list[1][4:6]), (row_as_list[2][0:2],row_as_list[2][4:6]))
+            cities_coords[city_name] = ((row_as_list[1][0:2], row_as_list[1][4:6]), (row_as_list[2][0:2],row_as_list[2][4:6]))
+            cities_to_news[city_name] = []
             # print row_as_list[0],  cities_coords[row_as_list[0]]
 
             # fmt = u'{:<15}'*len(row_as_list)
             # print fmt.format(*[s.decode('utf-8') for s in row_as_list])
-    return cities_coords
+    return cities_coords, cities_to_news
+
+def get_tags_from_article(article_parser):
+    tags = article_parser.findAll("meta", property="article:tag")[0]
+    tags_list = []
+    result = tags
+    while result: # They have nested tags, need to do it "recursively".
+        # print result["content"]
+        tags_list.append(result["content"])
+        try:
+            result = result.findAll("meta", property="article:tag")[0]
+        except IndexError:
+            break
+    # print tags.prettify()
+    return tags_list
+
 def get_articles():
     web_soup = soup(urllib2.urlopen(url), "html.parser")
     sub_sites = dict()
@@ -121,63 +146,79 @@ def delete_unallowed_signs(text):
             text = text.replace(ch, "")
     return text
 
+
 def most_common_in_list(lst):
     return max(set(lst), key=lst.count)
+
+def get_published_date(article_parser):
+    publish_date = article_parser.findAll("meta", property="article:published_time")[0]
+    return publish_date["content"]
+
 news_list = get_articles()
 
-def create_city_news_dict(city_to_coord_dict):
-    city_news_dict = dict()
-    for city_name in city_to_coord_dict:
-        city_news_dict[city_name] = [] # List of News
-    return  city_news_dict
+
+
+
 
 news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
 
 # LEMMATIZATION
 lemma_dict = lemma.get_lemma_dict()
 
-# City names and coordinates mapping.
-city_to_coord_mapping = get_cities_names_and_coords()
-
-# City to news mapping
-city_to_news_mapping = create_city_news_dict(city_to_coord_mapping)
-print city_to_news_mapping
+# City names, news and coordinates mapping.
+city_to_coord_mapping, city_to_news_mapping = get_cities_names_and_coords()
+# print repr([x.encode("utf-8") for x in city_to_news_mapping]).decode('string-escape')
+# print repr([x.encode("utf-8") for x in city_to_coord_mapping]).decode('string-escape')
 # print city_to_coord_mapping["chodzież"]
 
 # print lemma_dict["przynajmowaną"]
 # print lemma_dict["chodzieży"]
 
-for article in news_list:
-    print article
-    news_lemma_dict[article] = {"upper_case": [], "lower_case": []}
-    article_parser = soup(urllib2.urlopen(article), "html.parser")
+for article_link in news_list:
+    print article_link
+
+    article_parser = soup(urllib2.urlopen(article_link), "html.parser")
+
+    # TITLE
     title = article_parser.findAll(name="h1", class_="matTytul")[0].string
-    print title
+
+    # DATE
+    date_of_publishing = get_published_date(article_parser)
+    # print date_of_publishing
+
+    # TAGS
+    tags = get_tags_from_article(article_parser)
+    # print repr([x.encode("utf-8") for x in tags]).decode('string-escape')
+
+    # CONTENT
+    cities_names_mentioned_list = []
+    word_collection= []
     content = article_parser.findAll(name="div", id="tresc")
     content = delete_unallowed_signs(replace_br_with_spaces(content[0]))
-    cities_names_mentioned_list = []
     for word in content.split():
+
         if word[0].isupper():
             try:
                 base_form = lemma_dict[word.lower().encode('utf-8')]
-                # print word.lower(),  "->", base_form
-                if base_form in city_to_coord_mapping:
-                    cities_names_mentioned_list.append(base_form)
-                    # print base_form, "in base"
+                word_collection.append(base_form)
+                # print word , "->", base_form
+                base_form_with_upper_start = base_form.title()
+                if base_form_with_upper_start in city_to_coord_mapping:
+                    cities_names_mentioned_list.append(base_form_with_upper_start)
             except KeyError:
-                pass
+                word_collection.append(word)
                 # print "Can't find base word for", word
-    print "news jest z miasta:", most_common_in_list(cities_names_mentioned_list)
+    if len(cities_names_mentioned_list) > 0:
+        news_origin_city = most_common_in_list(cities_names_mentioned_list)
+        print "news jest z miasta:", news_origin_city
+        city_to_news_mapping[news_origin_city].append(News(article_link,date_of_publishing, title, word_collection, tags))
+
+
     break
 
-
-
-
-
-
-
-
-
+# for city, elem in city_to_news_mapping.iteritems():
+#     if elem:
+#         print city, [(x.link, x.lemmatized_words) for x in city_to_news_mapping[city]]
 
 
 
