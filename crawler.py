@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 import csv
 import codecs
+import httplib
 import sys
 import urllib2
+import json
 from bs4 import BeautifulSoup as soup
 import lemmatization_python as lemma
 url = "http://www.naszemiasto.pl/lista_miejscowosci/"
@@ -22,6 +24,7 @@ target_wojewodztwo = "wielkopolskie"
 # Wspolrzedne miast - http://astronomia.zagan.pl/art/wspolrzedne.html
 # mapowac miasto do zbioru info jezeli sa relewantne do zapytania
 # rel
+
 
 class News:
 
@@ -96,10 +99,10 @@ def get_articles():
 
     articles = []
     for i, elem in enumerate(sub_sites[target_wojewodztwo]):
-        if i == 1:
+        if i == 3:
             break
         for ii, category in enumerate(categories):
-            if ii == 1:
+            if ii == 3:
                 break
             final_url = elem+category
 
@@ -146,7 +149,6 @@ def delete_unallowed_signs(text):
             text = text.replace(ch, "")
     return text
 
-
 def most_common_in_list(lst):
     return max(set(lst), key=lst.count)
 
@@ -154,74 +156,114 @@ def get_published_date(article_parser):
     publish_date = article_parser.findAll("meta", property="article:published_time")[0]
     return publish_date["content"]
 
-news_list = get_articles()
+def get_coords_of_city(city_name, city_coords_dict):
+    # Mapping city name to coords in format like this: ((19,42), (49,42))
+    city_coords = city_coords_dict[city_name]
+    coord_e = int(city_coords[0][0]) + float(city_coords[0][1])/60
+    coord_n = int(city_coords[1][0]) + float(city_coords[1][1])/60
+    return coord_e, coord_n
+
+def get_formatted_dict_of_news(news_list):
+    result = {"news":[]}
+    for news in news_list:
+        result["news"].append( {"title":news.title.encode("utf-8"), "link": news.link.encode("utf-8")    }   )
+    return result
+
+def create_final_geojson(city_to_news_mapping, city_coords_mapping):
+    result = {"type": "FeatureCollection", "features": []}
+    for city_name, news in city_to_news_mapping.iteritems():
+        if news: # If there are any news from this city
+            coord_e, coord_n = get_coords_of_city(city_name, city_coords_mapping)
+            formatted_dict_of_news = get_formatted_dict_of_news(news)
+            new_feature = {"type":"Feature",
+                           "geometry":{"type":"Point","coordinates": [coord_e, coord_n]},
+                           "properties": formatted_dict_of_news
+                           }
+            # print city_name, "got some"
+            result["features"].append(new_feature)
+    return  result
 
 
+if __name__ == "__main__":
+    news_list = get_articles()
+    news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
+
+    # LEMMATIZATION
+    lemma_dict = lemma.get_lemma_dict()
+
+    # City names, news and coordinates mapping.
+    city_to_coord_mapping, city_to_news_mapping = get_cities_names_and_coords()
+    # print repr([x.encode("utf-8") for x in city_to_news_mapping]).decode('string-escape')
+    # print repr([x.encode("utf-8") for x in city_to_coord_mapping]).decode('string-escape')
+    # print city_to_coord_mapping["chodzież"]
+
+    # print lemma_dict["przynajmowaną"]
+    # print lemma_dict["chodzieży"]
+
+    for article_link in news_list:
+        print article_link
+        try:
+            article_parser = soup(urllib2.urlopen(article_link), "html.parser")
+        except httplib.InvalidURL:  # Some weird link, probably not a news where news should be
+            print "Bad link, skipping."
+            continue
+
+        # TITLE
+        title = article_parser.findAll(name="h1", class_="matTytul")[0].string
+
+        # DATE
+        date_of_publishing = get_published_date(article_parser)
+        # print date_of_publishing
+
+        # TAGS
+        tags = get_tags_from_article(article_parser)
+        # print repr([x.encode("utf-8") for x in tags]).decode('string-escape')
+
+        # CONTENT
+        cities_names_mentioned_list = []
+        word_collection = []
+        content = article_parser.findAll(name="div", id="tresc")
+        try:
+            content = delete_unallowed_signs(replace_br_with_spaces(content[0]))
+        except IndexError:
+            print "No content, skipping."
+            continue
+        for word in content.split():
+
+            if word[0].isupper():
+                try:
+                    base_form = lemma_dict[word.lower().encode('utf-8')]
+                    word_collection.append(base_form)
+                    # print word , "->", base_form
+                    base_form_with_upper_start = base_form.title()
+                    if base_form_with_upper_start in city_to_coord_mapping:
+                        cities_names_mentioned_list.append(base_form_with_upper_start)
+                except KeyError:
+                    word_collection.append(word)
+                    # print "Can't find base word for", word
+        if len(cities_names_mentioned_list) > 0:
+            news_origin_city = most_common_in_list(cities_names_mentioned_list)
+            # print "news jest z miasta:", news_origin_city
+            city_to_news_mapping[news_origin_city].append(News(article_link,date_of_publishing, title, word_collection, tags))
 
 
-
-news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
-
-# LEMMATIZATION
-lemma_dict = lemma.get_lemma_dict()
-
-# City names, news and coordinates mapping.
-city_to_coord_mapping, city_to_news_mapping = get_cities_names_and_coords()
-# print repr([x.encode("utf-8") for x in city_to_news_mapping]).decode('string-escape')
-# print repr([x.encode("utf-8") for x in city_to_coord_mapping]).decode('string-escape')
-# print city_to_coord_mapping["chodzież"]
-
-# print lemma_dict["przynajmowaną"]
-# print lemma_dict["chodzieży"]
-
-for article_link in news_list:
-    print article_link
-
-    article_parser = soup(urllib2.urlopen(article_link), "html.parser")
-
-    # TITLE
-    title = article_parser.findAll(name="h1", class_="matTytul")[0].string
-
-    # DATE
-    date_of_publishing = get_published_date(article_parser)
-    # print date_of_publishing
-
-    # TAGS
-    tags = get_tags_from_article(article_parser)
-    # print repr([x.encode("utf-8") for x in tags]).decode('string-escape')
-
-    # CONTENT
-    cities_names_mentioned_list = []
-    word_collection= []
-    content = article_parser.findAll(name="div", id="tresc")
-    content = delete_unallowed_signs(replace_br_with_spaces(content[0]))
-    for word in content.split():
-
-        if word[0].isupper():
-            try:
-                base_form = lemma_dict[word.lower().encode('utf-8')]
-                word_collection.append(base_form)
-                # print word , "->", base_form
-                base_form_with_upper_start = base_form.title()
-                if base_form_with_upper_start in city_to_coord_mapping:
-                    cities_names_mentioned_list.append(base_form_with_upper_start)
-            except KeyError:
-                word_collection.append(word)
-                # print "Can't find base word for", word
-    if len(cities_names_mentioned_list) > 0:
-        news_origin_city = most_common_in_list(cities_names_mentioned_list)
-        print "news jest z miasta:", news_origin_city
-        city_to_news_mapping[news_origin_city].append(News(article_link,date_of_publishing, title, word_collection, tags))
-
-
-    break
+    with open('news_vis.json', 'w') as outfile:
+        json.dump(create_final_geojson(city_to_news_mapping, city_to_coord_mapping), outfile)
+    # print json.dumps(create_final_geojson(city_to_news_mapping, city_to_coord_mapping))
 
 # for city, elem in city_to_news_mapping.iteritems():
 #     if elem:
 #         print city, [(x.link, x.lemmatized_words) for x in city_to_news_mapping[city]]
 
 
+"""
+teraz - miasto:[news, news]
 
+ma byc - miasto: {"geometry":{"type":"Point","coordinates":[18.067016601562496,51.730430542940184]},
+                 "properties":{ "newsy": {[{"title" : ddsjds,"link" : sdsjds" },
+                            {"title" :dsjdjdjdjd,"link" : dasadasda"}}
+]}
+"""
 
 """
     title = models.CharField(max_length=350)
@@ -230,4 +272,14 @@ for article_link in news_list:
     link = models.CharField(max_length=200)
     created_date = models.DateTimeField(default=timezone.now)
     geom = PointField()
+
+
+    "properties" : {
+"newsy" : [
+{"title" : ddsjds,
+"link" : sdsjds" },
+{"title" :dsjdjdjdjd,
+"link" : dasadasda"},
+]
+}
 """
