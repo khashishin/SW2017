@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 import csv
-import codecs
 import httplib
-import sys
 import urllib2
 import json
+import query_handler
 from bs4 import BeautifulSoup as soup
 import lemmatization_python as lemma
 url = "http://www.naszemiasto.pl/lista_miejscowosci/"
@@ -13,6 +12,7 @@ strip_signs_list = [',', '.', '\r', '\n', '-', '"', "'", ":", "(", ")", "#", "^"
 categories = ["/wydarzenia/urzad-miasta/","/wydarzenia/regionalne/", "/wydarzenia/kryminalne/",
                   "/wydarzenia/rozmaitosci/", "/zmieniamy-miasto/", "/moto/wypadki/"]
 target_wojewodztwo = "wielkopolskie"
+query = "burmistrz"
 # ze stron danego wojewodztwa pobrac informacje
 # lematyzowac informacje
 #     osobno zapisac wyrazy z duzymy literami,
@@ -28,7 +28,7 @@ target_wojewodztwo = "wielkopolskie"
 
 class News:
 
-    def __init__(self, link,published_date, title, lemmatized_words, tags):
+    def __init__(self, link, published_date, title, lemmatized_words, tags):
         self.link = link
         self.published_date = published_date
         self.title = title
@@ -99,10 +99,10 @@ def get_articles():
 
     articles = []
     for i, elem in enumerate(sub_sites[target_wojewodztwo]):
-        if i == 3:
+        if i == 1:
             break
         for ii, category in enumerate(categories):
-            if ii == 3:
+            if ii == 1:
                 break
             final_url = elem+category
 
@@ -163,19 +163,26 @@ def get_coords_of_city(city_name, city_coords_dict):
     coord_n = int(city_coords[1][0]) + float(city_coords[1][1])/60
     return coord_e, coord_n
 
-def get_formatted_dict_of_news(news_list):
+def get_formatted_dict_of_news_and_check_relevancy(news_list, city_to_news_mapping):
     result = {"news":[]}
+    title_set = set()
     for news in news_list:
-        result["news"].append( {"title":news.title.encode("utf-8"), "link": news.link.encode("utf-8")    }   )
+        if news.title.encode("utf-8") not in title_set and query_handler.news_is_relevant(query, news, city_to_news_mapping):
+            title_set.add(news.title.encode("utf-8"))
+            result["news"].append( {"title": news.title.encode("utf-8"), "link": news.link.encode("utf-8")    }   )
     return result
+
+def get_lemma_dict():
+    return lemma.get_lemma_dict()
+
 
 def create_final_geojson(city_to_news_mapping, city_coords_mapping):
     result = {"type": "FeatureCollection", "features": []}
     for city_name, news in city_to_news_mapping.iteritems():
-        if news: # If there are any news from this city
+        if news:# If there are any news from this city that are relevant
             coord_e, coord_n = get_coords_of_city(city_name, city_coords_mapping)
-            formatted_dict_of_news = get_formatted_dict_of_news(news)
-            new_feature = {"type":"Feature",
+            formatted_dict_of_news = get_formatted_dict_of_news_and_check_relevancy(news, city_to_news_mapping)
+            new_feature = {"type": "Feature",
                            "geometry":{"type":"Point","coordinates": [coord_e, coord_n]},
                            "properties": formatted_dict_of_news
                            }
@@ -184,21 +191,18 @@ def create_final_geojson(city_to_news_mapping, city_coords_mapping):
     return  result
 
 
+
 if __name__ == "__main__":
     news_list = get_articles()
     news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
 
     # LEMMATIZATION
-    lemma_dict = lemma.get_lemma_dict()
-
+    lemma_dict = get_lemma_dict()
+    city_derivatives_mapping = lemma.get_city_derivative_to_city_name_mapping()
+    derivative_to_city_name_mapping = lemma.get_city_derivative_to_city_name_mapping()
     # City names, news and coordinates mapping.
     city_to_coord_mapping, city_to_news_mapping = get_cities_names_and_coords()
     # print repr([x.encode("utf-8") for x in city_to_news_mapping]).decode('string-escape')
-    # print repr([x.encode("utf-8") for x in city_to_coord_mapping]).decode('string-escape')
-    # print city_to_coord_mapping["chodzież"]
-
-    # print lemma_dict["przynajmowaną"]
-    # print lemma_dict["chodzieży"]
 
     for article_link in news_list:
         print article_link
@@ -210,10 +214,10 @@ if __name__ == "__main__":
 
         # TITLE
         title = article_parser.findAll(name="h1", class_="matTytul")[0].string
+        print title
 
         # DATE
         date_of_publishing = get_published_date(article_parser)
-        # print date_of_publishing
 
         # TAGS
         tags = get_tags_from_article(article_parser)
@@ -241,10 +245,40 @@ if __name__ == "__main__":
                 except KeyError:
                     word_collection.append(word)
                     # print "Can't find base word for", word
+            else:  # Lower case
+                # Check both columns in lemat_add and find corresponding city in synonyms.txt
+                base_form = ""
+                try:
+                    base_form = lemma_dict[word.lower().encode('utf-8')]
+                except KeyError:
+                    base_form = word
+
+                base_derivative_form = ""
+                found_derivative_of_city = False
+
+                if base_form in city_to_news_mapping.keys():
+                    base_derivative_form = city_derivatives_mapping[base_form]
+                    found_derivative_of_city = True
+                if base_form in city_to_news_mapping.values():
+                    base_derivative_form = base_form
+                    found_derivative_of_city = True
+
+                if found_derivative_of_city:
+                    found_city = derivative_to_city_name_mapping[base_derivative_form].title()
+                    if found_city in city_to_coord_mapping:
+                        cities_names_mentioned_list.append(found_city)
+
+
         if len(cities_names_mentioned_list) > 0:
             news_origin_city = most_common_in_list(cities_names_mentioned_list)
             # print "news jest z miasta:", news_origin_city
             city_to_news_mapping[news_origin_city].append(News(article_link,date_of_publishing, title, word_collection, tags))
+
+
+        # break
+
+
+
 
 
     with open('news_vis.json', 'w') as outfile:
@@ -255,15 +289,6 @@ if __name__ == "__main__":
 #     if elem:
 #         print city, [(x.link, x.lemmatized_words) for x in city_to_news_mapping[city]]
 
-
-"""
-teraz - miasto:[news, news]
-
-ma byc - miasto: {"geometry":{"type":"Point","coordinates":[18.067016601562496,51.730430542940184]},
-                 "properties":{ "newsy": {[{"title" : ddsjds,"link" : sdsjds" },
-                            {"title" :dsjdjdjdjd,"link" : dasadasda"}}
-]}
-"""
 
 """
     title = models.CharField(max_length=350)
