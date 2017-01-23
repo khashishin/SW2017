@@ -98,7 +98,6 @@ def get_articles():
                     sub_sites[wojewodzka_strona].append( a_elem['href'])
 
     articles = []
-    print [x.encode("utf-8") for x in sub_sites.keys()]
     for i, elem in enumerate(sub_sites[target_wojewodztwo]):
         if i == 1:
             break
