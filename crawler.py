@@ -98,6 +98,7 @@ def get_articles():
                     sub_sites[wojewodzka_strona].append( a_elem['href'])
 
     articles = []
+    print [x.encode("utf-8") for x in sub_sites.keys()]
     for i, elem in enumerate(sub_sites[target_wojewodztwo]):
         if i == 1:
             break
@@ -193,6 +194,7 @@ def create_final_geojson(city_to_news_mapping, city_coords_mapping):
 
 
 if __name__ == "__main__":
+
     news_list = get_articles()
     news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
 
@@ -297,14 +299,4 @@ if __name__ == "__main__":
     link = models.CharField(max_length=200)
     created_date = models.DateTimeField(default=timezone.now)
     geom = PointField()
-
-
-    "properties" : {
-"newsy" : [
-{"title" : ddsjds,
-"link" : sdsjds" },
-{"title" :dsjdjdjdjd,
-"link" : dasadasda"},
-]
-}
 """
