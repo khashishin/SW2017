@@ -1,6 +1,10 @@
-import crawler
+import lemmatization_python as lemma
+lemma_dict = dict()
 
-lemma_dict = crawler.get_lemma_dict()
+def prepare_lemma_dict():
+    lemma_dict= lemma.get_lemma_dict()
+
+
 
 def get_tf(term, document):
     # print term, "in", document, term in document, "count",document.count(term), "len", len(document)

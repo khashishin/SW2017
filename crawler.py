@@ -11,8 +11,7 @@ coords_url = "http://astronomia.zagan.pl/art/wspolrzedne.html"
 strip_signs_list = [',', '.', '\r', '\n', '-', '"', "'", ":", "(", ")", "#", "^", "&", "!", "?", "[", "]"]
 categories = ["/wydarzenia/urzad-miasta/","/wydarzenia/regionalne/", "/wydarzenia/kryminalne/",
                   "/wydarzenia/rozmaitosci/", "/zmieniamy-miasto/", "/moto/wypadki/"]
-target_wojewodztwo = "wielkopolskie"
-query = "burmistrz"
+
 # ze stron danego wojewodztwa pobrac informacje
 # lematyzowac informacje
 #     osobno zapisac wyrazy z duzymy literami,
@@ -77,7 +76,7 @@ def get_tags_from_article(article_parser):
     # print tags.prettify()
     return tags_list
 
-def get_articles():
+def get_articles(target_wojewodztwo):
     web_soup = soup(urllib2.urlopen(url), "html.parser")
     sub_sites = dict()
     my_div = web_soup.find_all(name="ul", attrs={'class': "region"})
@@ -163,25 +162,26 @@ def get_coords_of_city(city_name, city_coords_dict):
     coord_n = int(city_coords[1][0]) + float(city_coords[1][1])/60
     return coord_e, coord_n
 
-def get_formatted_dict_of_news_and_check_relevancy(news_list, city_to_news_mapping):
+def get_formatted_dict_of_news_and_check_relevancy(news_list, city_to_news_mapping, query):
     result = {"news":[]}
     title_set = set()
+    query_handler.prepare_lemma_dict()
     for news in news_list:
-        if news.title.encode("utf-8") not in title_set and query_handler.news_is_relevant(query, news, city_to_news_mapping):
+        if  news.title.encode("utf-8") not in title_set and (query == "" or query_handler.news_is_relevant(query, news, city_to_news_mapping)):
             title_set.add(news.title.encode("utf-8"))
-            result["news"].append( {"title": news.title.encode("utf-8"), "link": news.link.encode("utf-8")    }   )
+            result["news"].append({"title": news.title.encode("utf-8"), "link": news.link.encode("utf-8")})
     return result
 
 def get_lemma_dict():
     return lemma.get_lemma_dict()
 
 
-def create_final_geojson(city_to_news_mapping, city_coords_mapping):
+def create_final_geojson(city_to_news_mapping, city_coords_mapping, query):
     result = {"type": "FeatureCollection", "features": []}
     for city_name, news in city_to_news_mapping.iteritems():
         if news:# If there are any news from this city that are relevant
             coord_e, coord_n = get_coords_of_city(city_name, city_coords_mapping)
-            formatted_dict_of_news = get_formatted_dict_of_news_and_check_relevancy(news, city_to_news_mapping)
+            formatted_dict_of_news = get_formatted_dict_of_news_and_check_relevancy(news, city_to_news_mapping, query)
             new_feature = {"type": "Feature",
                            "geometry":{"type":"Point","coordinates": [coord_e, coord_n]},
                            "properties": formatted_dict_of_news
@@ -190,11 +190,8 @@ def create_final_geojson(city_to_news_mapping, city_coords_mapping):
             result["features"].append(new_feature)
     return  result
 
-
-
-if __name__ == "__main__":
-
-    news_list = get_articles()
+def main(target_wojewodztwo, query):
+    news_list = get_articles(target_wojewodztwo)
     news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
 
     # LEMMATIZATION
@@ -280,12 +277,11 @@ if __name__ == "__main__":
 
 
 
-
-
     with open('news_vis.json', 'w') as outfile:
-        json.dump(create_final_geojson(city_to_news_mapping, city_to_coord_mapping), outfile)
-    # print json.dumps(create_final_geojson(city_to_news_mapping, city_to_coord_mapping))
+        json.dump(create_final_geojson(city_to_news_mapping, city_to_coord_mapping,query), outfile)
 
+if __name__ == "__main__":
+    main(target_wojewodztwo="wielkopolskie", query="burmistrz")
 # for city, elem in city_to_news_mapping.iteritems():
 #     if elem:
 #         print city, [(x.link, x.lemmatized_words) for x in city_to_news_mapping[city]]
