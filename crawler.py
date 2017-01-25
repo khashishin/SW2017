@@ -280,7 +280,6 @@ def main(target_wojewodztwo, query):
                     if found_city in city_to_coord_mapping:
                         cities_names_mentioned_list.append(found_city)
 
-
         if len(cities_names_mentioned_list) > 0:
             news_origin_city = most_common_in_list(cities_names_mentioned_list)
             # print "news jest z miasta:", news_origin_city
@@ -301,8 +300,8 @@ def main(target_wojewodztwo, query):
 
 
 if __name__ == "__main__":
-    # done: 'dolnoslaskie', 'kujawskopomorskie', 'lodzkie', 'lubelskie', 'lubuskie', 'malopolskie',
-    all_woj = [ 'mazowieckie', 'opolskie', 'podkarpackie', 'podlaskie', 'pomorskie', 'slaskie', 'swietokrzyskie', 'warminskomazurskie', 'wielkopolskie', 'zachodniopomorskie']
+    # done: 'dolnoslaskie', 'kujawskopomorskie', 'lodzkie', 'lubelskie', 'lubuskie', 'malopolskie', 'mazowieckie', 'opolskie',
+    all_woj = [ 'podkarpackie', 'podlaskie', 'pomorskie', 'slaskie', 'swietokrzyskie', 'warminskomazurskie', 'wielkopolskie', 'zachodniopomorskie']
     for woj in all_woj:
         print "Doing", woj
         main(target_wojewodztwo=woj, query="")
@@ -311,13 +310,3 @@ if __name__ == "__main__":
 # for city, elem in city_to_news_mapping.iteritems():
 #     if elem:
 #         print city, [(x.link, x.lemmatized_words) for x in city_to_news_mapping[city]]
-
-
-"""
-    title = models.CharField(max_length=350)
-    city = models.CharField(max_length=100)
-    tags = models.CharField(max_length=350)
-    link = models.CharField(max_length=200)
-    created_date = models.DateTimeField(default=timezone.now)
-    geom = PointField()
-"""
