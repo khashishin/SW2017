@@ -2207,7 +2207,6 @@ mielecką mielecki
 tucholskie tucholski
 lubliniance lublinianka
 krakowskim krakowski
-biskup
 biskupa biskup
 sopocką sopocki
 oleckimi olecki
@@ -2478,7 +2477,6 @@ warszawiankach warszawianka
 piekarskimi piekarski
 buszczanek buszczanka
 grodziskiej grodziski
-biskupu
 biskupovi biskup
 starachowickim starachowicki
 legnicki legnicki
