@@ -6,6 +6,7 @@ import json
 import query_handler
 from bs4 import BeautifulSoup as soup
 import lemmatization_python as lemma
+import HTMLParser
 url = "http://www.naszemiasto.pl/lista_miejscowosci/"
 coords_url = "http://astronomia.zagan.pl/art/wspolrzedne.html"
 strip_signs_list = [',', '.', '\r', '\n', '-', '"', "'", ":", "(", ")", "#", "^", "&", "!", "?", "[", "]"]
@@ -98,14 +99,19 @@ def get_articles(target_wojewodztwo):
 
     articles = []
     for i, elem in enumerate(sub_sites[target_wojewodztwo]):
-        if i == 1:
-            break
+        # if i == 1:
+        #     break
+        if i % 10 == 0:
+            print i
         for ii, category in enumerate(categories):
-            if ii == 1:
-                break
+            # if ii == 1:
+            #     break
             final_url = elem+category
+            try:
 
-            web_soup = soup(urllib2.urlopen(final_url), "html.parser")
+                web_soup = soup(urllib2.urlopen(final_url), "html.parser")
+            except urllib2.HTTPError:
+                continue
             # Najwiekszy news na gorze
             top_section = web_soup.findAll(name="section", id="rotator-sb")
             for element in top_section:
@@ -188,9 +194,12 @@ def create_final_geojson(city_to_news_mapping, city_coords_mapping, query):
                            }
             # print city_name, "got some"
             result["features"].append(new_feature)
-    return  result
+
+    return result
 
 def main(target_wojewodztwo, query):
+    bad_link_count, no_content_count = 0, 0
+
     news_list = get_articles(target_wojewodztwo)
     news_lemma_dict = dict()  # Mapping news title to {big_letter_words:[], small_letter_words:[]}
 
@@ -203,16 +212,20 @@ def main(target_wojewodztwo, query):
     # print repr([x.encode("utf-8") for x in city_to_news_mapping]).decode('string-escape')
 
     for article_link in news_list:
-        print article_link
+        # print article_link
         try:
             article_parser = soup(urllib2.urlopen(article_link), "html.parser")
-        except httplib.InvalidURL:  # Some weird link, probably not a news where news should be
-            print "Bad link, skipping."
+        except (httplib.InvalidURL, HTMLParser.HTMLParseError):  # Some weird link, probably not a news where news should be
+            # print "Bad link, skipping."
+            bad_link_count += 1
             continue
 
         # TITLE
-        title = article_parser.findAll(name="h1", class_="matTytul")[0].string
-        print title
+        try:
+            title = article_parser.findAll(name="h1", class_="matTytul")[0].string
+        except IndexError:
+            bad_link_count += 1
+            continue
 
         # DATE
         date_of_publishing = get_published_date(article_parser)
@@ -228,7 +241,8 @@ def main(target_wojewodztwo, query):
         try:
             content = delete_unallowed_signs(replace_br_with_spaces(content[0]))
         except IndexError:
-            print "No content, skipping."
+            # print "No content, skipping."
+            no_content_count += 1
             continue
         for word in content.split():
 
@@ -275,13 +289,25 @@ def main(target_wojewodztwo, query):
 
         # break
 
-
-
-    with open('news_vis.json', 'w') as outfile:
+    print target_wojewodztwo, "no content:", no_content_count, "bad link:", bad_link_count
+    out_file_name = target_wojewodztwo+"_news.json"
+    with open(out_file_name, 'w') as outfile:
         json.dump(create_final_geojson(city_to_news_mapping, city_to_coord_mapping,query), outfile)
 
+# def main_from_local_files(target_wojewodztwo):
+#     in_file_name = target_wojewodztwo+"_news.json"
+#     with open(in_file_name) as f:
+#         data = json.load(f)
+
+
 if __name__ == "__main__":
-    main(target_wojewodztwo="wielkopolskie", query="burmistrz")
+    # done: 'dolnoslaskie', 'kujawskopomorskie', 'lodzkie', 'lubelskie', 'lubuskie', 'malopolskie',
+    all_woj = [ 'mazowieckie', 'opolskie', 'podkarpackie', 'podlaskie', 'pomorskie', 'slaskie', 'swietokrzyskie', 'warminskomazurskie', 'wielkopolskie', 'zachodniopomorskie']
+    for woj in all_woj:
+        print "Doing", woj
+        main(target_wojewodztwo=woj, query="")
+    # main(target_wojewodztwo="wielkopolskie", query="burmistrz")
+
 # for city, elem in city_to_news_mapping.iteritems():
 #     if elem:
 #         print city, [(x.link, x.lemmatized_words) for x in city_to_news_mapping[city]]
