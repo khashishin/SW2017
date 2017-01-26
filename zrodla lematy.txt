@@ -1,2 +1,0 @@
-http://www.lexiconista.com/datasets/lemmatization/
-http://sgjp.pl/morfeusz/dopobrania.html.po -> slownik zrodlowy
